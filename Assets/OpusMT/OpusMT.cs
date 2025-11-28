@@ -28,8 +28,8 @@ public class OpusMT : MonoBehaviour
         private const string SPIECE_UNDERLINE = "\u2581";
 
         // Changed type to the provided C# class name
-        public SentencePieceProcessor SpmSource;
-        public SentencePieceProcessor SpmTarget;
+        public SentencePieceWrapper SpmSource;
+        public SentencePieceWrapper SpmTarget;
 
         public Dictionary<string, int> Encoder { get; } = new Dictionary<string, int>();
         public Dictionary<int, string> Decoder { get; } = new Dictionary<int, string>();
@@ -64,13 +64,8 @@ public class OpusMT : MonoBehaviour
             try
             {
                 // Use the provided SentencePieceProcessor class
-                SpmSource = new SentencePieceProcessor();
-                if (!SpmSource.Load(sourceSpm))
-                    throw new Exception($"Failed to load source SentencePiece model from {sourceSpm}");
-
-                SpmTarget = new SentencePieceProcessor();
-                if (!SpmTarget.Load(targetSpm))
-                    throw new Exception($"Failed to load target SentencePiece model from {targetSpm}");
+                SpmSource = new SentencePieceWrapper(sourceSpm);
+                SpmTarget = new SentencePieceWrapper(targetSpm);
             }
             catch (FileNotFoundException ex)
             {
@@ -135,7 +130,7 @@ public class OpusMT : MonoBehaviour
             return inputs;
         }
 
-        public ModelInput Call(string text, bool truncation = true)
+        public ModelInput TokenizeToModelInput(string text, bool truncation = true)
         {
             List<string> tokens = Tokenize(text);
             List<long> tokenIds = ConvertTokensToIds(tokens);
@@ -334,7 +329,7 @@ public class OpusMT : MonoBehaviour
         /// <summary>
         /// Applies the sequence bias to the token scores (logits).
         /// </summary>
-        public float[,] Invoke(int[][] inputIds, float[,] scores)
+        public float[,] Process(int[][] inputIds, float[,] scores)
         {
             int batchSize = scores.GetLength(0);
             int vocabularySize = scores.GetLength(1);
@@ -456,7 +451,7 @@ public class OpusMT : MonoBehaviour
         string inputText,
         int maxLength)
     {
-        var inputs = tokenizer.Call(inputText);
+        var inputs = tokenizer.TokenizeToModelInput(inputText);
         var inputIds = inputs.InputIds.ToArray();
         var attentionMask = inputs.AttentionMask.ToArray();
         var batchSize = 1;
@@ -593,7 +588,7 @@ public class OpusMT : MonoBehaviour
                     float[,] processedLogits = nextTokenLogits;
                     if (logitsProcessor != null)
                     {
-                        processedLogits = logitsProcessor.Invoke(fullDecodedIdsSoFar, nextTokenLogits);
+                        processedLogits = logitsProcessor.Process(fullDecodedIdsSoFar, nextTokenLogits);
                     }
 
                     // Greedy Search (Argmax)
