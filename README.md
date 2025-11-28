@@ -28,7 +28,7 @@ The required output files are:
 - `decoder_model.onnx`
 - `decoder_with_past_model.onnx`
 
-Place all three files inside Unity’s **StreamingAssets** folder.
+Place all three files inside Unity’s **`StreamingAssets`** folder.
 
 ---
 
