@@ -1,12 +1,15 @@
 ﻿using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 public class OpusMT : MonoBehaviour
 {
@@ -623,18 +626,175 @@ public class OpusMT : MonoBehaviour
         }
     }
 
+    public enum Status
+    {
+        Init,
+        Error,
+        Loading,
+        Ready,
+        Generate,
+    }
+
+    // Define a delegate (or use Action<T>)
+    public delegate void StatusChangedDelegate(Status status);
+    public event StatusChangedDelegate OnStatusChanged;
+
+    private Status _status;
+
+    // Public getter, no public setter
+    public Status status
+    {
+        get => _status;
+        protected set
+        {
+            if (_status != value)
+            {
+                _status = value;
+                OnStatusChanged?.Invoke(_status);
+            }
+        }
+    }
+
+    protected SynchronizationContext _unityContext;
+    private CancellationTokenSource _cts;
+    private Task _backgroundTask;
+    private bool _isStopping = false;
+
+    protected void Awake()
+    {
+        _unityContext = SynchronizationContext.Current;
+    }
+
+    protected void RunBackground(Action<CancellationToken> work)
+    {
+        // Prevent overlapping tasks
+        if (_backgroundTask != null && !_backgroundTask.IsCompleted)
+        {
+            Debug.LogWarning("Background task already running!");
+            return;
+        }
+
+        _cts = new CancellationTokenSource();
+        _backgroundTask = Task.Run(() => work(_cts.Token), _cts.Token);
+    }
+
+    protected async Task BackgroundStop()
+    {
+        if (_isStopping)
+        {
+            return;
+        }
+
+        _isStopping = true;
+
+        if (_cts != null)
+        {
+            _cts.Cancel();
+        }
+
+        if (_backgroundTask != null)
+        {
+            try
+            {
+                await _backgroundTask; // wait for it to finish
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("Task was cancelled on destroy.");
+            }
+        }
+
+        _cts?.Dispose();
+
+        _cts = null;
+        _backgroundTask = null;
+
+        _isStopping = false;
+    }
+
+    protected void PostStatus(Status newStatus)
+    {
+        if (_unityContext != null)
+        {
+            _unityContext.Post(_ => status = newStatus, null);
+        }
+    }
+
+    public delegate void ResponseGeneratedDelegate(string response);
+    public event ResponseGeneratedDelegate OnResponseGenerated;
+
+    private void PostResponse(string response)
+    {
+        if (_unityContext != null)
+        {
+            _unityContext.Post(_ => OnResponseGenerated?.Invoke(response), null);
+        }
+    }
+
+    MarianTokenizerShim tokenizer;
+    SequenceBiasLogitsProcessor biasProcessor;
+    InferenceSession encoder_session;
+    InferenceSession decoder_session;
+    InferenceSession decoder_with_past_session;
+
+    const int MAX_LENGTH = 512;
+
     void Start()
     {
-        var sentence = "halo apa kabar";
-        const int MAX_LENGTH = 50;
-        const string LOCAL_DIR = @"D:/ai/onnx/opus-mt/id-to-en";
+        status = Status.Init;
+        RunBackground(LoadModel);
+    }
 
-        Debug.Log($"Source: {sentence}");
-        Debug.Log("------------------------------");
+    async void OnDestroy()
+    {
+        await BackgroundStop();
+        FreeModel();
+    }
 
+    string _prompt = string.Empty;
+    public void Prompt(string prompt)
+    {
+        _prompt = prompt;
+        RunBackground(RunPrompt);
+    }
+
+    void RunPrompt(CancellationToken cts)
+    {
         try
         {
-            var tokenizer = new MarianTokenizerShim(
+            PostStatus(Status.Generate);
+
+            var translated_text = RunMarianOnnxInference(
+                encoder_session,
+                decoder_session,
+                decoder_with_past_session,
+                tokenizer,
+                biasProcessor,
+                _prompt,
+                512
+            );
+
+            PostResponse(translated_text);
+        }
+        catch (Exception ex)
+        {
+            Debug.Log($"\nError during execution: {ex.Message}");
+        }
+        finally
+        {
+            PostStatus(Status.Ready);
+        }
+    }
+
+    void LoadModel(CancellationToken cts)
+    {
+        try
+        {
+            PostStatus(Status.Loading);
+
+            string LOCAL_DIR = Application.streamingAssetsPath;
+
+            tokenizer = new MarianTokenizerShim(
                 Path.Combine(LOCAL_DIR, "source.spm"),
                 Path.Combine(LOCAL_DIR, "target.spm"),
                 Path.Combine(LOCAL_DIR, "vocab.json"),
@@ -650,27 +810,44 @@ public class OpusMT : MonoBehaviour
                 }
             };
 
-            SequenceBiasLogitsProcessor biasProcessor = new SequenceBiasLogitsProcessor(SEQUENCE_BIAS_CONFIG);
+            biasProcessor = new SequenceBiasLogitsProcessor(SEQUENCE_BIAS_CONFIG);
 
-            using var encoder_session = new InferenceSession(Path.Combine(LOCAL_DIR, "encoder_model.onnx"));
-            using var decoder_session = new InferenceSession(Path.Combine(LOCAL_DIR, "decoder_model.onnx"));
-            using var decoder_with_past_session = new InferenceSession(Path.Combine(LOCAL_DIR, "decoder_with_past_model.onnx"));
+            encoder_session = new InferenceSession(Path.Combine(LOCAL_DIR, "encoder_model.onnx"));
+            decoder_session = new InferenceSession(Path.Combine(LOCAL_DIR, "decoder_model.onnx"));
+            decoder_with_past_session = new InferenceSession(Path.Combine(LOCAL_DIR, "decoder_with_past_model.onnx"));
 
-            var translated_text = RunMarianOnnxInference(
-                encoder_session,
-                decoder_session,
-                decoder_with_past_session,
-                tokenizer,
-                biasProcessor,
-                sentence,
-                MAX_LENGTH
-            );
-
-            Debug.Log($"Translation: **{translated_text}**");
+            PostStatus(Status.Ready);
         }
-        catch (Exception ex)
+        catch (System.Exception ex)
         {
-            Debug.Log($"\nError during execution: {ex.Message}");
+            Debug.LogError($"An unexpected error occurred: {ex.Message}");
+
+            FreeModel();
+            PostStatus(Status.Error);
         }
     }
+
+    void FreeModel()
+    {
+        if (tokenizer != null && tokenizer is IDisposable tokenizerDisposable)
+        {
+            tokenizerDisposable.Dispose();
+        }
+
+        if (encoder_session != null && encoder_session is IDisposable encoder_sessionDisposable)
+        {
+            encoder_sessionDisposable.Dispose();
+        }
+
+        if (decoder_session != null && decoder_session is IDisposable decoder_sessionDisposable)
+        {
+            decoder_sessionDisposable.Dispose();
+        }
+
+        if (decoder_with_past_session != null && decoder_with_past_session is IDisposable decoder_with_past_sessionDisposable)
+        {
+            decoder_with_past_sessionDisposable.Dispose();
+        }
+    }
+
 }
