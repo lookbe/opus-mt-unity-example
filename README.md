@@ -36,6 +36,13 @@ The script will automatically load the ONNX models and SentencePiece tokenizer f
 
 ---
 
+## ▶️ Demo Video
+
+Watch the translation demo here:  
+https://www.youtube.com/watch?v=phkIhTfa2o4
+
+---
+
 ## 🔗 References
 
 ### SentencePiece Library (Modified)
