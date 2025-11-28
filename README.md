@@ -56,9 +56,9 @@ https://www.youtube.com/watch?v=phkIhTfa2o4
 
 ---
 
-## ☕ Support the Project
+## ☕ Support the Developer
 
-If this project helps you, consider supporting me:
+If this helps you, consider supporting me:
 
 [<img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" width="200">](https://www.buymeacoffee.com/lookbe)
 
