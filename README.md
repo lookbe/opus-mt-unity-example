@@ -2,14 +2,27 @@
 
 This project demonstrates how to run **Opus-MT machine translation models** inside **Unity** using **ONNX Runtime** and a modified **SentencePiece** implementation.
 
+> ⚠️ **Note:** This example currently supports **Windows only** because ONNX Runtime for Unity (CPU build) and the SentencePiece native plugin here are built for Windows.
+
 ---
 
 ## 📦 Setup
 
-### 1. Convert Opus-MT Model to ONNX
-Choose any Opus-MT language model from Hugging Face (e.g., `en → id`, `id → en`, etc.) and convert it to ONNX format.
+### 1. Convert Opus-MT Model to ONNX  
+You have two options:
 
-After conversion, you should obtain:
+#### **Option A — Download Ready-Made ONNX Models**
+Some Opus-MT models on Hugging Face already include exported ONNX versions.  
+Download the following files:
+
+- `encoder_model.onnx`
+- `decoder_model.onnx`
+- `decoder_with_past_model.onnx`
+
+#### **Option B — Convert the Model Yourself**
+Choose any Opus-MT language model from Hugging Face (e.g., `en → id`, `id → en`, etc.) and convert it manually to ONNX.
+
+The required output files are:
 
 - `encoder_model.onnx`
 - `decoder_model.onnx`
@@ -43,6 +56,14 @@ https://www.youtube.com/watch?v=phkIhTfa2o4
 
 ---
 
+## ☕ Support the Project
+
+If this project helps you, consider supporting me:
+
+[<img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" width="200">](https://www.buymeacoffee.com/lookbe)
+
+---
+
 ## 🔗 References
 
 ### SentencePiece Library (Modified)
@@ -51,5 +72,3 @@ https://github.com/Foorcee/libSentencePiece
 
 ### ONNX Runtime for Unity
 https://github.com/asus4/onnxruntime-unity
-
----
