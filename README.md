@@ -1,6 +1,6 @@
 # Unity Opus-MT ONNX Example
 
-This project demonstrates how to run **Opus-MT machine translation models** inside **Unity** using **ONNX Runtime** and a modified **SentencePiece** implementation.
+This project demonstrates how to run **Opus-MT machine translation models** inside **Unity** using **ONNX Runtime** and a **SentencePiece** implementation.
 
 > ⚠️ **Note:** This example currently supports **Windows only** because ONNX Runtime for Unity (CPU build) and the SentencePiece native plugin here are built for Windows.
 
@@ -65,10 +65,6 @@ If this helps you, consider supporting me:
 ---
 
 ## 🔗 References
-
-### SentencePiece Library (Modified)
-Original source:  
-https://github.com/Foorcee/libSentencePiece
 
 ### ONNX Runtime for Unity
 https://github.com/asus4/onnxruntime-unity
